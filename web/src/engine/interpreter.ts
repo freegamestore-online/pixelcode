@@ -442,7 +442,11 @@ export function execute(
     return true;
   }
 
-  run(ast, {});
+  try {
+    run(ast, {});
+  } catch (cause) {
+    error = cause instanceof Error ? cause.message : "Execution failed";
+  }
 
   return { snapshots, error };
 }
