@@ -62,3 +62,6 @@ body {
 .pixel-animate {
   animation: pixel-pop 0.15s ease-out;
 }
+
+/* Legacy game components share the canonical paper surface. */
+:root { --bg: var(--paper); }
