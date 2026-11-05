@@ -12,12 +12,18 @@ interface CodeEditorProps {
 
 // --- Syntax highlighting ---
 
-const COMMANDS_RE = /\b(dot|line|rect|fill|circle|clear)\b/g;
-const COLOR_CMD_RE = /\b(color)\b/g;
-const KEYWORDS_RE = /\b(repeat)\b/g;
-const NUMBERS_RE = /\b(\d+)\b/g;
-const STRINGS_RE = /(&quot;[^&]*?&quot;|&#x27;[^&]*?&#x27;)/g;
-const VARIABLE_RE = /\b(i)\b/g;
+// One pass over the escaped line, so no rule can match markup another rule
+// inserted. Group order = colour order below.
+const TOKENS_RE =
+  /(&quot;[^&]*?&quot;|&#x27;[^&]*?&#x27;)|\b(repeat)\b|\b(dot|line|rect|fill|circle|clear)\b|\b(color)\b|\b(i)\b|\b(\d+)\b/g;
+const TOKEN_COLORS = [
+  "#98c379", // strings: green
+  "#c678dd", // keywords: purple
+  "#f59e0b", // commands: amber
+  "#f97316", // color command: orange
+  "#06b6d4", // variable i: cyan
+  "#d19a66", // numbers: orange
+];
 
 function escapeHtml(text: string): string {
   return text
@@ -28,7 +34,7 @@ function escapeHtml(text: string): string {
     .replace(/'/g, "&#x27;");
 }
 
-function highlightCode(code: string): string {
+export function highlightCode(code: string): string {
   return code
     .split("\n")
     .map((rawLine) => {
@@ -50,19 +56,11 @@ function highlightCode(code: string): string {
 }
 
 function highlightExpression(line: string): string {
-  return line
-    // Strings first (green)
-    .replace(STRINGS_RE, '<span style="color:#98c379">$1</span>')
-    // Keywords (purple)
-    .replace(KEYWORDS_RE, '<span style="color:#c678dd">$1</span>')
-    // Commands (amber)
-    .replace(COMMANDS_RE, '<span style="color:#f59e0b">$1</span>')
-    // color command (orange)
-    .replace(COLOR_CMD_RE, '<span style="color:#f97316">$1</span>')
-    // Variable i (cyan)
-    .replace(VARIABLE_RE, '<span style="color:#06b6d4">$1</span>')
-    // Numbers (orange)
-    .replace(NUMBERS_RE, '<span style="color:#d19a66">$1</span>');
+  return line.replace(TOKENS_RE, (match, ...groups: unknown[]) => {
+    // Exactly one capture group matched; its index picks the colour.
+    const i = groups.findIndex((g) => g !== undefined);
+    return `<span style="color:${TOKEN_COLORS[i]}">${match}</span>`;
+  });
 }
 
 export default function CodeEditor({
