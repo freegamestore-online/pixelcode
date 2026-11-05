@@ -2,6 +2,9 @@ import type { PixelGrid, ExecutionSnapshot } from "../types";
 import { NAMED_COLORS } from "../types";
 
 const MAX_STEPS = 2000;
+// line() and circle() build a point list, so huge coordinates would hang the
+// page. Grids are at most 16 wide, so this bound never limits a real drawing.
+const MAX_COORD = 1000;
 
 // ---- Tokenizer ----
 
@@ -352,6 +355,10 @@ export function execute(
               const y1 = evalExpr(node.args[1]! as Expr, vars);
               const x2 = evalExpr(node.args[2]! as Expr, vars);
               const y2 = evalExpr(node.args[3]! as Expr, vars);
+              if ([x1, y1, x2, y2].some((v) => Math.abs(v) > MAX_COORD)) {
+                error = `line() coordinates must be between -${MAX_COORD} and ${MAX_COORD} at line ${node.line}`;
+                return false;
+              }
               for (const [px, py] of bresenhamLine(x1, y1, x2, y2)) {
                 setPixel(px, py);
               }
@@ -367,13 +374,14 @@ export function execute(
               const ry = evalExpr(node.args[1]! as Expr, vars);
               const rw = evalExpr(node.args[2]! as Expr, vars);
               const rh = evalExpr(node.args[3]! as Expr, vars);
+              // Loops are clamped to the grid: setPixel ignores the rest anyway
               // Top and bottom edges
-              for (let dx = 0; dx < rw; dx++) {
+              for (let dx = Math.max(0, -rx); dx < Math.min(rw, gridSize - rx); dx++) {
                 setPixel(rx + dx, ry);
                 setPixel(rx + dx, ry + rh - 1);
               }
               // Left and right edges
-              for (let dy = 0; dy < rh; dy++) {
+              for (let dy = Math.max(0, -ry); dy < Math.min(rh, gridSize - ry); dy++) {
                 setPixel(rx, ry + dy);
                 setPixel(rx + rw - 1, ry + dy);
               }
@@ -389,8 +397,9 @@ export function execute(
               const fy = evalExpr(node.args[1]! as Expr, vars);
               const fw = evalExpr(node.args[2]! as Expr, vars);
               const fh = evalExpr(node.args[3]! as Expr, vars);
-              for (let dy = 0; dy < fh; dy++) {
-                for (let dx = 0; dx < fw; dx++) {
+              // Clamped to the grid, so huge sizes can't hang the page
+              for (let dy = Math.max(0, -fy); dy < Math.min(fh, gridSize - fy); dy++) {
+                for (let dx = Math.max(0, -fx); dx < Math.min(fw, gridSize - fx); dx++) {
                   setPixel(fx + dx, fy + dy);
                 }
               }
@@ -405,6 +414,10 @@ export function execute(
               const cx = evalExpr(node.args[0]! as Expr, vars);
               const cy = evalExpr(node.args[1]! as Expr, vars);
               const cr = evalExpr(node.args[2]! as Expr, vars);
+              if ([cx, cy, cr].some((v) => Math.abs(v) > MAX_COORD)) {
+                error = `circle() values must be between -${MAX_COORD} and ${MAX_COORD} at line ${node.line}`;
+                return false;
+              }
               for (const [px, py] of midpointCircle(cx, cy, cr)) {
                 setPixel(px, py);
               }

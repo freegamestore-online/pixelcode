@@ -563,3 +563,33 @@ describe("empty code", () => {
     expect(result.error).toBeNull();
   });
 });
+
+// ========================================================================
+// Huge sizes and coordinates must not hang the page
+// ========================================================================
+
+describe("huge values", () => {
+  it("fill() with a huge size paints the visible grid and returns", () => {
+    const grid = finalGrid('color("red")\nfill(0 - 1000000000, 0 - 1000000000, 2000000000, 2000000000)', 4);
+    expect(grid.flat().every((c) => c === NAMED_COLORS.red)).toBe(true);
+  });
+
+  it("rect() with a huge size draws only the visible edges", () => {
+    const grid = finalGrid('color("red")\nrect(1, 1, 1000000000, 1000000000)', 4);
+    expect(grid[1]).toEqual([null, NAMED_COLORS.red, NAMED_COLORS.red, NAMED_COLORS.red]);
+    expect(grid[3]).toEqual([null, NAMED_COLORS.red, null, null]);
+  });
+
+  it("rect() and fill() partly off the grid are unchanged", () => {
+    const grid = finalGrid('color("red")\nrect(0 - 1, 0 - 1, 3, 3)\ncolor("blue")\nfill(3, 3, 5, 5)', 4);
+    expect(grid[0]).toEqual([null, NAMED_COLORS.red, null, null]);
+    expect(grid[1]).toEqual([NAMED_COLORS.red, NAMED_COLORS.red, null, null]);
+    expect(grid[3]).toEqual([null, null, null, NAMED_COLORS.blue]);
+  });
+
+  it("line() and circle() reject coordinates beyond 1000", () => {
+    expect(execError("line(0, 0, 1000000000, 0)")).toMatch(/between -1000 and 1000/);
+    expect(execError("circle(4, 4, 1000000000)")).toMatch(/between -1000 and 1000/);
+    expect(execError("line(0 - 1000, 0, 1000, 0)")).toBeNull();
+  });
+});
