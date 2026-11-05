@@ -1,4 +1,4 @@
-import { GameShell, GameTopbar, GameButton } from "@freegamestore/games";
+import { GameShell, GameTopbar, GameButton, useGameSounds } from "@freegamestore/games";
 import { useState, useCallback, useRef, useEffect, useMemo } from "react";
 import type { ExecutionSnapshot } from "./types";
 import { levels, FREESTYLE_LEVEL_ID, createFreestyleLevel } from "./engine/levels";
@@ -22,7 +22,7 @@ const STARTER_CODE: Record<number, string> = {
   9: '// A diagonal from corner to corner\ncolor("purple")\n',
   10: '// Draw a border around the grid\ncolor("red")\n',
   11: "// Compose shapes into a face!\n",
-  12: "// Freestyle! Draw whatever you want.\n",
+  [FREESTYLE_LEVEL_ID]: "// Freestyle! Draw whatever you want.\n",
 };
 
 function loadCompleted(): Set<number> {
@@ -37,9 +37,37 @@ function saveCompleted(set: Set<number>) {
   localStorage.setItem("pixelcode_completed", JSON.stringify([...set]));
 }
 
+function loadSavedCode(): Record<number, string> {
+  try {
+    const raw = localStorage.getItem("pixelcode_code");
+    if (raw) return JSON.parse(raw) as Record<number, string>;
+  } catch { /* ignore */ }
+  return {};
+}
+
+function loadCode(levelId: number): string {
+  return loadSavedCode()[levelId] ?? STARTER_CODE[levelId] ?? "";
+}
+
+function saveCode(levelId: number, code: string) {
+  try {
+    localStorage.setItem("pixelcode_code", JSON.stringify({ ...loadSavedCode(), [levelId]: code }));
+    localStorage.setItem("pixelcode_level", String(levelId));
+  } catch { /* ignore */ }
+}
+
+function loadLevel(): number {
+  try {
+    const id = Number(localStorage.getItem("pixelcode_level"));
+    if (id === FREESTYLE_LEVEL_ID || levels.some((l) => l.id === id)) return id;
+  } catch { /* ignore */ }
+  return 1;
+}
+
 function GameContent() {
-  const [levelId, setLevelId] = useState(1);
-  const [code, setCode] = useState(STARTER_CODE[1] ?? "");
+  const { playTick, playError, playScore, playLevelUp } = useGameSounds();
+  const [levelId, setLevelId] = useState(loadLevel);
+  const [code, setCode] = useState(() => loadCode(levelId));
   const [snapshots, setSnapshots] = useState<ExecutionSnapshot[]>([]);
   const [stepIndex, setStepIndex] = useState(-1);
   const [isRunning, setIsRunning] = useState(false);
@@ -51,7 +79,12 @@ function GameContent() {
   const [showComplete, setShowComplete] = useState(false);
   const [completedLevels, setCompletedLevels] = useState(loadCompleted);
 
-  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Read by the running animation so speed changes apply mid-run
+  const speedRef = useRef(speed);
+  useEffect(() => {
+    speedRef.current = speed;
+  }, [speed]);
 
   const level = useMemo(
     () =>
@@ -61,7 +94,16 @@ function GameContent() {
     [levelId],
   );
 
-  const isFreestyle = levelId === FREESTYLE_LEVEL_ID || levelId === 12;
+  const isFreestyle = levelId === FREESTYLE_LEVEL_ID;
+
+  useEffect(() => {
+    saveCode(levelId, code);
+  }, [levelId, code]);
+
+  // Tick on every animated or manual step
+  useEffect(() => {
+    if (stepIndex > 0) playTick();
+  }, [stepIndex]);
 
   // Current display state
   const currentSnapshot = stepIndex >= 0 && stepIndex < snapshots.length ? snapshots[stepIndex] : null;
@@ -78,13 +120,13 @@ function GameContent() {
   // Cleanup timer on unmount
   useEffect(() => {
     return () => {
-      if (timerRef.current) clearInterval(timerRef.current);
+      if (timerRef.current) clearTimeout(timerRef.current);
     };
   }, []);
 
   const clearRunning = useCallback(() => {
     if (timerRef.current) {
-      clearInterval(timerRef.current);
+      clearTimeout(timerRef.current);
       timerRef.current = null;
     }
     setIsRunning(false);
@@ -108,11 +150,7 @@ function GameContent() {
     (id: number) => {
       clearRunning();
       setLevelId(id);
-      setCode(
-        id === FREESTYLE_LEVEL_ID
-          ? "// Freestyle! Draw whatever you want.\n"
-          : STARTER_CODE[id] ?? "",
-      );
+      setCode(loadCode(id));
       setSnapshots([]);
       setStepIndex(-1);
       setMessage("");
@@ -124,6 +162,15 @@ function GameContent() {
     [clearRunning],
   );
 
+  const markCompleted = useCallback((id: number) => {
+    setCompletedLevels((prev) => {
+      const next = new Set(prev);
+      next.add(id);
+      saveCompleted(next);
+      return next;
+    });
+  }, []);
+
   const finishExecution = useCallback(
     (execSnapshots: ExecutionSnapshot[]) => {
       const lastSnap = execSnapshots[execSnapshots.length - 1];
@@ -133,6 +180,7 @@ function GameContent() {
         setMessage(lastSnap.error);
         setIsError(true);
         setIsSuccess(false);
+        playError();
         return;
       }
 
@@ -146,6 +194,10 @@ function GameContent() {
         }
         setMessage(`Drew ${painted} pixels!`);
         setIsSuccess(painted > 0);
+        if (painted > 0) {
+          markCompleted(FREESTYLE_LEVEL_ID);
+          playScore();
+        }
         return;
       }
 
@@ -154,19 +206,16 @@ function GameContent() {
       if (result.won) {
         setIsSuccess(true);
         setIsError(false);
-        setCompletedLevels((prev) => {
-          const next = new Set(prev);
-          next.add(level.id);
-          saveCompleted(next);
-          return next;
-        });
+        markCompleted(level.id);
+        playLevelUp();
         setTimeout(() => setShowComplete(true), 400);
       } else {
         setIsError(true);
         setIsSuccess(false);
+        playError();
       }
     },
-    [level, isFreestyle],
+    [level, isFreestyle, markCompleted, playError, playScore, playLevelUp],
   );
 
   const handleRun = useCallback(() => {
@@ -180,6 +229,7 @@ function GameContent() {
       setStepIndex(0);
       setMessage(error);
       setIsError(true);
+      playError();
       return;
     }
 
@@ -188,7 +238,7 @@ function GameContent() {
     let idx = 0;
     setStepIndex(0);
 
-    timerRef.current = setInterval(() => {
+    const tick = () => {
       idx++;
       if (idx >= execSnaps.length) {
         clearRunning();
@@ -197,8 +247,10 @@ function GameContent() {
         return;
       }
       setStepIndex(idx);
-    }, speed);
-  }, [code, level, speed, handleReset, clearRunning, finishExecution]);
+      timerRef.current = setTimeout(tick, speedRef.current);
+    };
+    timerRef.current = setTimeout(tick, speedRef.current);
+  }, [code, level, handleReset, clearRunning, finishExecution, playError]);
 
   const handleStep = useCallback(() => {
     if (snapshots.length === 0) {
@@ -209,6 +261,7 @@ function GameContent() {
       if (error && execSnaps.length <= 1) {
         setMessage(error);
         setIsError(true);
+        playError();
       }
       return;
     }
@@ -220,7 +273,7 @@ function GameContent() {
         finishExecution(snapshots);
       }
     }
-  }, [snapshots, stepIndex, code, level, finishExecution]);
+  }, [snapshots, stepIndex, code, level, finishExecution, playError]);
 
   // Count target pixels for win modal
   const targetPixelCount = useMemo(() => {
@@ -233,7 +286,10 @@ function GameContent() {
     return count;
   }, [level]);
 
-  const hasNextLevel = levels.some((l) => l.id === levelId + 1);
+  // After the last numbered level, "Next" opens Freestyle
+  const nextLevelId = levels.some((l) => l.id === levelId + 1)
+    ? levelId + 1
+    : isFreestyle ? null : FREESTYLE_LEVEL_ID;
 
   return (
     <div
@@ -258,6 +314,8 @@ function GameContent() {
           gap: 12,
           fontSize: 13,
           flexShrink: 0,
+          flexWrap: "wrap",
+          rowGap: 2,
         }}
       >
         <span style={{ fontWeight: 700, color: "var(--accent)" }}>
@@ -277,26 +335,12 @@ function GameContent() {
         </span>
       </div>
 
-      {/* Main split layout */}
-      <div
-        style={{
-          flex: 1,
-          display: "flex",
-          minHeight: 0,
-          overflow: "hidden",
-        }}
-      >
-        {/* Left: Pixel canvas (55%) */}
+      {/* Stacked on phones (stage on top), side by side from md up */}
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden md:flex-row">
+        {/* Pixel canvas — a size container so the grid scales to fit */}
         <div
-          style={{
-            flex: "0 0 55%",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            padding: 16,
-            overflow: "auto",
-            background: "var(--paper)",
-          }}
+          className="flex shrink-0 basis-[45%] items-center justify-center overflow-hidden p-3 [container-type:size] md:basis-[55%] md:p-4"
+          style={{ background: "var(--paper)" }}
         >
           <PixelCanvas
             grid={displayGrid}
@@ -305,18 +349,9 @@ function GameContent() {
           />
         </div>
 
-        {/* Right: Editor + Controls (45%) */}
+        {/* Editor + Controls */}
         <div
-          style={{
-            flex: "0 0 45%",
-            display: "flex",
-            flexDirection: "column",
-            borderLeft: "1px solid var(--line)",
-            padding: 12,
-            gap: 10,
-            minHeight: 0,
-            overflow: "hidden",
-          }}
+          className="flex min-h-0 flex-1 flex-col gap-2.5 overflow-y-auto border-t border-[var(--line)] p-3 md:border-t-0 md:border-l"
         >
           <GameControls
             onRun={handleRun}
@@ -358,8 +393,8 @@ function GameContent() {
         <LevelComplete
           levelName={level.name}
           pixelCount={targetPixelCount}
-          hasNextLevel={hasNextLevel}
-          onNext={() => handleSelectLevel(levelId + 1)}
+          hasNextLevel={nextLevelId !== null}
+          onNext={() => nextLevelId !== null && handleSelectLevel(nextLevelId)}
           onRetry={() => {
             setShowComplete(false);
             handleReset();

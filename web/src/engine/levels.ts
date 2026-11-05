@@ -239,17 +239,6 @@ export const levels: Level[] = [
       return g;
     })(),
   },
-
-  // Level 12: Freestyle (sandbox)
-  {
-    id: 12,
-    name: "Freestyle",
-    description: "Your canvas! Draw anything you want.",
-    hint: "No rules — experiment with all commands!",
-    gridSize: 16,
-    availableCommands: ["color", "dot", "line", "rect", "fill", "circle", "clear", "repeat"],
-    targetGrid: Array.from({ length: 16 }, () => Array.from({ length: 16 }, () => null)),
-  },
 ];
 
 export function createFreestyleLevel(): Level {

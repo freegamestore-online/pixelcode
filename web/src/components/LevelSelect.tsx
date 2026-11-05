@@ -68,7 +68,7 @@ export default function LevelSelect({
             gap: 10,
           }}
         >
-          {levels.filter((l) => l.id !== 12).map((lvl) => {
+          {levels.map((lvl) => {
             const completed = completedLevels.has(lvl.id);
             const isCurrent = lvl.id === currentLevel;
 
@@ -148,6 +148,9 @@ export default function LevelSelect({
           <span style={{ fontWeight: 700, fontSize: 14, color: "var(--accent)" }}>
             Freestyle — Draw Anything!
           </span>
+          {completedLevels.has(FREESTYLE_LEVEL_ID) && (
+            <span style={{ fontSize: 12, color: "var(--success)" }}>{"✓"}</span>
+          )}
         </button>
       </div>
     </div>

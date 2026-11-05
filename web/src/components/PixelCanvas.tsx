@@ -8,10 +8,13 @@ interface PixelCanvasProps {
 }
 
 export default function PixelCanvas({ grid, targetGrid, gridSize }: PixelCanvasProps) {
-  // Cell size adapts to grid dimensions
+  // Cell size adapts to grid dimensions, shrinking further to fit the
+  // stage (the parent is a size container) on small screens
   const maxCellSize = 48;
   const minCellSize = 24;
-  const cellSize = Math.max(minCellSize, Math.min(maxCellSize, Math.floor(480 / gridSize)));
+  const preferredCellSize = Math.max(minCellSize, Math.min(maxCellSize, Math.floor(480 / gridSize)));
+  const fit = `(100cqmin - ${gridSize - 1}px) / ${gridSize}`;
+  const cellSize = `min(${preferredCellSize}px, calc(${fit}))`;
 
   // Build a set of target-only cells for the overlay hint
   const targetHints = useMemo(() => {
@@ -49,8 +52,8 @@ export default function PixelCanvas({ grid, targetGrid, gridSize }: PixelCanvasP
     <div
       style={{
         display: "inline-grid",
-        gridTemplateRows: `repeat(${gridSize}, ${cellSize}px)`,
-        gridTemplateColumns: `repeat(${gridSize}, ${cellSize}px)`,
+        gridTemplateRows: `repeat(${gridSize}, ${cellSize})`,
+        gridTemplateColumns: `repeat(${gridSize}, ${cellSize})`,
         gap: "1px",
         background: "var(--line-strong)",
         borderRadius: 8,
@@ -99,7 +102,7 @@ export default function PixelCanvas({ grid, targetGrid, gridSize }: PixelCanvasP
               {status === "match" && (
                 <span
                   style={{
-                    fontSize: cellSize * 0.35,
+                    fontSize: `calc(${cellSize} * 0.35)`,
                     color: "rgba(255,255,255,0.6)",
                     fontWeight: 700,
                     pointerEvents: "none",
@@ -113,7 +116,7 @@ export default function PixelCanvas({ grid, targetGrid, gridSize }: PixelCanvasP
               {status === "wrong" && (
                 <span
                   style={{
-                    fontSize: cellSize * 0.35,
+                    fontSize: `calc(${cellSize} * 0.35)`,
                     color: "rgba(255,255,255,0.8)",
                     fontWeight: 700,
                     pointerEvents: "none",
