@@ -56,6 +56,7 @@ describe("success modal timer", () => {
     advance(400);
     expect(container.textContent).toContain("Level Complete!");
     expect(localStorage.getItem("pixelcode_completed")).toBe("[1]");
+    expect(container.textContent).toContain("1 pixels painted perfectly!");
   });
 
   it("does not appear when Reset is pressed right after a win", () => {
@@ -71,5 +72,18 @@ describe("success modal timer", () => {
     click("Three Dots");
     advance(500);
     expect(container.textContent).not.toContain("Level Complete!");
+  });
+});
+
+describe("freestyle", () => {
+  it("counts the painted pixels", () => {
+    act(() => root.unmount());
+    localStorage.setItem("pixelcode_level", "99");
+    localStorage.setItem("pixelcode_code", JSON.stringify({ 99: 'color("red")\nfill(0, 0, 2, 3)' }));
+    root = createRoot(container);
+    act(() => root.render(<App />));
+    click("Run");
+    advance(2000);
+    expect(container.textContent).toContain("Drew 6 pixels!");
   });
 });

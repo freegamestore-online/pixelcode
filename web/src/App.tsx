@@ -1,6 +1,6 @@
 import { GameShell, GameTopbar, GameButton, useGameSounds } from "@freegamestore/games";
 import { useState, useCallback, useRef, useEffect, useMemo } from "react";
-import type { ExecutionSnapshot } from "./types";
+import type { ExecutionSnapshot, PixelGrid } from "./types";
 import { levels, FREESTYLE_LEVEL_ID, createFreestyleLevel } from "./engine/levels";
 import { execute, checkWin } from "./engine/interpreter";
 import PixelCanvas from "./components/PixelCanvas";
@@ -62,6 +62,10 @@ function loadLevel(): number {
     if (id === FREESTYLE_LEVEL_ID || levels.some((l) => l.id === id)) return id;
   } catch { /* ignore */ }
   return 1;
+}
+
+function countPainted(grid: PixelGrid): number {
+  return grid.flat().filter((cell) => cell !== null).length;
 }
 
 function GameContent() {
@@ -149,34 +153,24 @@ function GameContent() {
     setShowComplete(false);
   }, [clearRunning]);
 
-  const handleClearCanvas = useCallback(() => {
-    handleReset();
-  }, [handleReset]);
-
   const handleSelectLevel = useCallback(
     (id: number) => {
-      clearRunning();
+      handleReset();
       setLevelId(id);
       setCode(loadCode(id));
-      setSnapshots([]);
-      setStepIndex(-1);
-      setMessage("");
-      setIsError(false);
-      setIsSuccess(false);
-      setShowComplete(false);
       setShowLevels(false);
     },
-    [clearRunning],
+    [handleReset],
   );
 
-  const markCompleted = useCallback((id: number) => {
-    setCompletedLevels((prev) => {
-      const next = new Set(prev);
-      next.add(id);
+  const markCompleted = useCallback(
+    (id: number) => {
+      const next = new Set(completedLevels).add(id);
       saveCompleted(next);
-      return next;
-    });
-  }, []);
+      setCompletedLevels(next);
+    },
+    [completedLevels],
+  );
 
   const finishExecution = useCallback(
     (execSnapshots: ExecutionSnapshot[]) => {
@@ -192,13 +186,7 @@ function GameContent() {
       }
 
       if (isFreestyle) {
-        // Count painted pixels for freestyle
-        let painted = 0;
-        for (const row of lastSnap.grid) {
-          for (const cell of row) {
-            if (cell !== null) painted++;
-          }
-        }
+        const painted = countPainted(lastSnap.grid);
         setMessage(`Drew ${painted} pixels!`);
         setIsSuccess(painted > 0);
         if (painted > 0) {
@@ -283,15 +271,7 @@ function GameContent() {
   }, [snapshots, stepIndex, code, level, finishExecution, playError]);
 
   // Count target pixels for win modal
-  const targetPixelCount = useMemo(() => {
-    let count = 0;
-    for (const row of level.targetGrid) {
-      for (const cell of row) {
-        if (cell !== null) count++;
-      }
-    }
-    return count;
-  }, [level]);
+  const targetPixelCount = useMemo(() => countPainted(level.targetGrid), [level]);
 
   // After the last numbered level, "Next" opens Freestyle
   const nextLevelId = levels.some((l) => l.id === levelId + 1)
@@ -364,7 +344,7 @@ function GameContent() {
             onRun={handleRun}
             onStep={handleStep}
             onReset={handleReset}
-            onClear={handleClearCanvas}
+            onClear={handleReset}
             isRunning={isRunning}
             hasCode={code.trim().length > 0}
             canStep={canStep || snapshots.length === 0}
